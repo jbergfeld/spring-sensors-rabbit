@@ -1,90 +1,38 @@
-# Demo application for VMware Tanzu Application Platform
-
-An application to demonstrate the capabilities of [VMware Tanzu Application Platform](https://tanzu.vmware.com/application-platform).
+# Demo Spring Sensors application
 
 ## Prerequisites
-
-To deploy this demo app you need to have VMware Tanzu Application Platform with `dev`, `light` or `full` profile installed. 
-For installation instructions, please see the [platform documentation](https://docs.vmware.com/en/VMware-Tanzu-Application-Platform/index.html). You also need to have prepared the "defult" namespace as described in the "Set Up Developer Namespaces to Use Installed Packages" section of the documentation.
 
 This application acts as a consumer of sensor data which the application stores in an in-memory database and displays on a dashboard.
 
 [Spring Cloud Stream](https://spring.io/projects/spring-cloud-stream), a framework built on top of Spring Boot and Spring Integration, is used as a flexible messaging abstraction. 
 Spring Cloud Stream supports a variety of binder implementations. In this case, we are using the one for RabbitMQ.
 
-So, as a prerequisite to run this application with VMware Tanzu Application Platform, you need a RabbitMQ cluster running in the same Kubernetes namespace (e.g. provisioned via the [RabbitMQ Cluster Operator for Kubernetes](https://www.rabbitmq.com/kubernetes/operator/operator-overview.html)).
+## Deploying the publisher
 
-```yaml
-apiVersion: rabbitmq.com/v1beta1
-kind: RabbitmqCluster
-metadata:
-  name: rmq-1
-```
-
-To apply this `RabbitmqCluster` run the following command:
-
-```
-kubectl apply -f rabbit/cluster.yaml
-```
-
-Binding an application workload to a backing service such as a RabbitMQ queue is one of the most important use cases within the context of the VMware Tanzu Application Platform. 
-This use case is made possible by the [Service Binding Specification](https://github.com/servicebinding/spec) for Kubernetes.
-With the service binding that is defined in the [workload.yaml](config/workload.yaml), the credentials that are required for the connection to the RabbitMQ cluster are magically injected as environment variables into the container.
-
-You do need a `ClusterRole` that allows the "Services Toolkit" component access to bind to the RabbitMQ cluster you just created. Apply the `ClusterRole` definition using:
-
-```
-kubectl apply -f rabbit/rbac.yaml
-```
+The sensor data is generated and sent by [this](https://github.com/jbergfeld/spring-sensors-publisher) application via asynchronous messaging.
 
 ## Deploying the application
 
-> NOTE: The provided `config/workload.yaml` file uses the Git URL for a repo generated with this accelerator. When you want to modify the source, you must push the code to your own Git repository and then update the `spec.source.git` information in the `config/workload.yaml` file.
-
-To deploy this application on VMware Tanzu Application Platform, execute the following command:
+To build and store the client container: (ensure JAVA_HOME points to an installed JDK and a Docker daemon is running)
 
 ```
-tanzu apps workload create spring-sensors -f config/workload.yaml
+./mvnw spring-boot:build-image -Dspring-boot.build-image.imageName=docker.io/library/spring-sensors-client:latest
 ```
 
-You can access the application's UI using the URL shown by running the following command (provided you have DNS configured for Cloud Native Runtimes):
-
 ```
-tanzu app workload get spring-sensors
+docker tag spring-sensors-publisher:latest REGISTRY/PROJECT/spring-sensors-client:latest
 ```
 
-## Deploying the publisher
-
-The sensor data is generated and sent by [this](https://github.com/tanzu-end-to-end/spring-sensors-sensor) application via asynchronous messaging.
-
-To build this application using the build service apply the an `Image` definition using:
-
 ```
-kubectl apply -f demo/publisher-image.yaml
+docker push REGISTRY/PROJECT/spring-sensors-client:latest
 ```
 
-Check the build pod progress using:
+Where REGISTRY is your container registry and PROJECT exists with the registry.
 
 ```
-kubectl get pod -l=image.kpack.io/image=spring-sensors-publisher
+kubectl apply -f kubernetes-deployment.yaml
+kubectl apply -f kubernetes-service.yaml
 ```
 
-Once the init containers finish and the pod status shows `Complete`, you can check the image status using:
+Note: replace the REGISTRY and PROJECT placeholders in the deployment manifest with your respective values.
 
-```
-kubectl get image.kpack.io spring-sensors-publisher
-```
-
-That should show `READY` as `True` and the `LATESTIMAGE` populated.
-
-We are now ready to deploy the publisher app using a Kubernetes `Deployment`, run this command:
-
-```
-kubectl apply -f demo/publisher-deployment.yaml
-```
-
-You can scale up the number of sensors displayed in the demo app by using:
-
-```
-kubectl scale deployment/spring-sensors-publisher --replicas=5
-```
