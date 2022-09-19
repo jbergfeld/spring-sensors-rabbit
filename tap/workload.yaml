@@ -11,7 +11,7 @@ spec:
     git:
       url: https://github.com/jbergfeld/spring-sensors-rabbit.git
       ref:
-        branch: rabbit
+        branch: tap-scanner
   serviceClaims:
     - name: rmq
       ref:
